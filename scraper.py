@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 import os
 from datetime import datetime
-from zoneinfo import ZoneInfo  # Python 3.9+; handles DST automatically
+from zoneinfo import ZoneInfo  # Handles PST/PDT automatically
 
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
@@ -12,11 +12,11 @@ from twilio.rest import Client
 TARGET_HOURS_PT = [15, 18, 21]  # 3 PM, 6 PM, 9 PM
 
 def scrape_numbers():
-    url = "https://example.com"  # Replace with the real URL
+    url = "https://example.com"  # Replace with your target URL
     r = requests.get(url)
     soup = BeautifulSoup(r.text, 'html.parser')
 
-    # Example: find two numbers by CSS selectors
+    # Example: find two numbers using CSS selectors
     num1 = float(soup.select_one('#first-number').text.strip())
     num2 = float(soup.select_one('#second-number').text.strip())
     return num1 + num2
@@ -26,7 +26,7 @@ def send_email(total):
     message = Mail(
         from_email='your_email@example.com',
         to_emails='recipient@example.com',
-        subject='Scraper Result',
+        subject='Room Availability Notification',
         plain_text_content=f'The total is {total}'
     )
     sg.send(message)
@@ -42,10 +42,11 @@ def send_sms(total):
 if __name__ == "__main__":
     now_pt = datetime.now(ZoneInfo("America/Los_Angeles"))
 
-    if now_pt.hour in TARGET_HOURS_PT:
-        total = scrape_numbers()
-        send_email(total)
-        # send_sms(total)  # Uncomment if SMS is needed
-        print(f"Run executed at PT {now_pt.hour}:00, total={total}")
-    else:
-        print(f"Not a target hour ({now_pt.hour} PT). Exiting.")
+    if now_pt.hour not in TARGET_HOURS_PT:
+        print(f"Current PT hour ({now_pt.hour}) is not a target hour. Exiting.")
+        exit(0)
+
+    total = scrape_numbers()
+    send_email(total)
+    # send_sms(total)  # Uncomment if SMS is needed
+    print(f"Run executed at PT {now_pt.hour}:00, total={total}")
