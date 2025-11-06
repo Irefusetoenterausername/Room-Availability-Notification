@@ -1,26 +1,28 @@
-name: Room Availability Scraper
+name: Room Availability Notification
 
 on:
   schedule:
-    # Every 3 hours; Python script filters exact PT hours (3,6,9 PM)
-    - cron: '0 */3 * * *'
-  workflow_dispatch:
+    # Runs every day at 3pm, 6pm, 9pm PST (converted to UTC)
+    - cron: '0 23,2,5 * * *'  # UTC times for 3pm,6pm,9pm PST
+  workflow_dispatch:  # allows manual triggering
 
 jobs:
-  scrape:
+  scrape_and_notify:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests sendgrid
 
       - name: Run scraper
         env:
