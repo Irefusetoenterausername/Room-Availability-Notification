@@ -1,48 +1,20 @@
 import os
-import requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
+from playwright.sync_api import sync_playwright
 
 # --------------------------
 # Configuration
 # --------------------------
 
-# Hours you want to send notifications (PST)
-TARGET_HOURS_PT = [15, 18, 21]  # 3pm, 6pm, 9pm PST
+# Hours to send notification (Pacific Time)
+TARGET_HOURS_PT = [15, 18, 21]  # 3pm, 6pm, 9pm
 
-# Dynamic date for today
-today = datetime.now(ZoneInfo("America/Los_Angeles")).strftime("%m-%d-%Y")
-
-# Payload for POST request (dynamic checkin/ArrvalDt)
-PAYLOAD = {
-    "checkin": today,
-    "gridcolumn": "1",
-    "adults": "1",
-    "child": "0",
-    "nonights": "1",
-    "ShowSelectedNights": "true",
-    "DefaultSelectedNights": "1",
-    "calendarDateFormat": "mm-dd-yy",
-    "rooms": "1",
-    "ArrvalDt": today,
-    "HotelId": "15343",
-    "isLogin": "lf",
-    "selectedLang": "",
-    "modifysearch": "false",
-    "layoutView": "2",
-    "ShowMinNightsMatchedRatePlan": "false",
-    "LayoutTheme": "2",
-    "w_showadult": "false",
-    "w_showchild_bb": "false",
-    "ShowMoreLessOpt": "",
-    "w_showchild": "true",
-    "ischeckavailabilityclicked": "0"
-}
-
-POST_URL = "https://live.ipms247.com/booking/rmdetails"
-HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+URL = "https://live.ipms247.com/booking/book-rooms-hollywoodviphotel"
+SELECTOR_1 = "#leftroom_0"
+SELECTOR_2 = "#leftroom_4"
 
 # SendGrid configuration
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
@@ -54,26 +26,47 @@ TO_EMAILS = ['3104866003@tmomail.net', 'cherrytop3000@gmail.com']
 # --------------------------
 
 def scrape_numbers():
-    response = requests.post(POST_URL, data=PAYLOAD, headers=HEADERS)
-    print("Status code:", response.status_code)
-    print("Response headers:", response.headers)
-    print("Response text (first 500 chars):")
-    print(response.text[:500])  # print first 500 chars for inspection
-    return 0  # temporarily skip email sending until we understand the response
+    """Launch a headless browser, load the page, and read the two numbers."""
+    with sync_playwright() as p:
+        browser = p.firefox.launch(headless=True)
+        page = browser.new_page()
+
+        print("Loading page...")
+        page.goto(URL, timeout=60000)
+
+        # Wait for the elements to appear (adjust timeout if needed)
+        page.wait_for_selector(SELECTOR_1, timeout=20000)
+        page.wait_for_selector(SELECTOR_2, timeout=20000)
+
+        num1_text = page.inner_text(SELECTOR_1).strip()
+        num2_text = page.inner_text(SELECTOR_2).strip()
+        browser.close()
+
+        print(f"Scraped values: {num1_text}, {num2_text}")
+        try:
+            num1 = float(num1_text)
+            num2 = float(num2_text)
+        except ValueError:
+            raise ValueError(f"Could not parse numbers: {num1_text}, {num2_text}")
+        return num1 + num2
+
 
 def send_email(total):
+    """Send results via SendGrid."""
     message = Mail(
         from_email=FROM_EMAIL,
         to_emails=TO_EMAILS,
         subject="",  # No subject
-        plain_text_content=f"{total} rooms available"
+        plain_text_content=f"{total} rooms available",
     )
+
     try:
         sg = SendGridAPIClient(SENDGRID_API_KEY)
         sg.send(message)
         print("Email sent successfully!")
     except Exception as e:
         print(f"Error sending email: {e}")
+
 
 # --------------------------
 # Main Execution
@@ -82,6 +75,8 @@ def send_email(total):
 now_pt = datetime.now(ZoneInfo("America/Los_Angeles"))
 current_hour = now_pt.hour
 
-print(f"Testing mode — forcing run at {current_hour} PT")
-total = scrape_numbers()
-send_email(total)
+if current_hour in TARGET_HOURS_PT:
+    total = scrape_numbers()
+    send_email(total)
+else:
+    print(f"Current PT hour ({current_hour}) is not a target hour. Exiting.")
