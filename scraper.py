@@ -1,50 +1,91 @@
-import requests
-from bs4 import BeautifulSoup
 import os
+import requests
 from datetime import datetime
-from zoneinfo import ZoneInfo  # Handles PST/PDT automatically
-
+from zoneinfo import ZoneInfo
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
-# Target PT hours
-now_utc = datetime.utcnow()
-now_pt = now_utc.replace(tzinfo=ZoneInfo("UTC")).astimezone(ZoneInfo("America/Los_Angeles"))
+# --------------------------
+# Configuration
+# --------------------------
 
-print("DEBUG: UTC hour =", now_utc.hour, "PT hour =", now_pt.hour)
+# Hours you want to send notifications (PST)
+TARGET_HOURS_PT = [15, 18, 21]  # 3pm, 6pm, 9pm PST
 
-# Force script to run for testing
-TARGET_HOURS_PT = [now_pt.hour]
+# Dynamic date for today
+today = datetime.now(ZoneInfo("America/Los_Angeles")).strftime("%m-%d-%Y")
+
+# Payload for POST request (dynamic checkin/ArrvalDt)
+PAYLOAD = {
+    "checkin": today,
+    "gridcolumn": "1",
+    "adults": "1",
+    "child": "0",
+    "nonights": "1",
+    "ShowSelectedNights": "true",
+    "DefaultSelectedNights": "1",
+    "calendarDateFormat": "mm-dd-yy",
+    "rooms": "1",
+    "ArrvalDt": today,
+    "HotelId": "15343",
+    "isLogin": "lf",
+    "selectedLang": "",
+    "modifysearch": "false",
+    "layoutView": "2",
+    "ShowMinNightsMatchedRatePlan": "false",
+    "LayoutTheme": "2",
+    "w_showadult": "false",
+    "w_showchild_bb": "false",
+    "ShowMoreLessOpt": "",
+    "w_showchild": "true",
+    "ischeckavailabilityclicked": "0"
+}
+
+POST_URL = "https://live.ipms247.com/booking/rmdetails"
+HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+
+# SendGrid configuration
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+FROM_EMAIL = "cherrytop3000@gmail.com"
+TO_EMAILS = ['3104866003@tmomail.net', 'cherrytop3000@gmail.com']
+
+# --------------------------
+# Functions
+# --------------------------
 
 def scrape_numbers():
-    url = "https://live.ipms247.com/booking/book-rooms-hollywoodviphotel"  # Replace with your target URL
-    r = requests.get(url)
-    soup = BeautifulSoup(r.text, 'html.parser')
-
-    # Example: find two numbers using CSS selectors
-    num1 = float(soup.select_one('#leftroom_0').text.strip())
-    num2 = float(soup.select_one('#leftroom_4').text.strip())
-
+    response = requests.post(POST_URL, data=PAYLOAD, headers=HEADERS)
+    data = response.json()
+    
+    # Replace these keys with the actual JSON keys for your numbers
+    num1 = float(data["leftroom_0"])
+    num2 = float(data["leftroom_4"])
+    
     return num1 + num2
 
 def send_email(total):
-    sg = SendGridAPIClient(os.environ['SENDGRID_API_KEY'])
     message = Mail(
-        from_email='cherrytop3000@gmail.com',  # Replace with your verified SendGrid sender email
-        to_emails=['3104866003@tmomail.net', 'cherrytop3000@gmail.com'],     # Replace with your recipient email
-        subject='',
-        plain_text_content=f'{total} rooms available'
+        from_email=FROM_EMAIL,
+        to_emails=TO_EMAILS,
+        subject="",  # No subject
+        plain_text_content=f"{total} rooms available"
     )
-    response = sg.send(message)
-    print(f"Email sent! Status code: {response.status_code}")
+    try:
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        sg.send(message)
+        print("Email sent successfully!")
+    except Exception as e:
+        print(f"Error sending email: {e}")
 
-if __name__ == "__main__":
-    now_pt = datetime.now(ZoneInfo("America/Los_Angeles"))
+# --------------------------
+# Main Execution
+# --------------------------
 
-    if now_pt.hour not in TARGET_HOURS_PT:
-        print(f"Current PT hour ({now_pt.hour}) is not a target hour. Exiting.")
-        exit(0)
+now_pt = datetime.now(ZoneInfo("America/Los_Angeles"))
+current_hour = now_pt.hour
 
+if current_hour in TARGET_HOURS_PT:
     total = scrape_numbers()
     send_email(total)
-    print(f"Run executed at PT {now_pt.hour}:00, total={total}")
+else:
+    print(f"Current PT hour ({current_hour}) is not a target hour. Exiting.")
