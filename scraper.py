@@ -1,4 +1,5 @@
 import os
+import requests
 import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime
@@ -11,7 +12,11 @@ from selenium.webdriver.common.by import By
 URL = "https://live.ipms247.com/booking/book-rooms-hollywoodviphotel"
 TARGET_HOURS_PT = [15, 18, 21]  # 3pm, 6pm, 9pm PT
 
-RECIPIENTS = ["cherrytop3000@gmail.com", "3104866003@tmomail.net"]
+FORMSPREE_ENDPOINT = os.environ.get("FORMSPREE_ENDPOINT")
+
+if not FORMSPREE_ENDPOINT:
+    print("Missing Formspree endpoint.")
+    exit(1)
 
 # --- PST/PDT Time Check ---
 pst_now = datetime.now(ZoneInfo("America/Los_Angeles"))
@@ -43,29 +48,19 @@ try:
 finally:
     driver.quit()
 
-# --- Brevo SMTP (TLS on port 587) ---
-smtp_user = os.environ.get("BREVO_SMTP_USER")
-smtp_pass = os.environ.get("BREVO_SMTP_PASS")
-smtp_server = os.environ.get("BREVO_SMTP_SERVER")
-
-if not smtp_user or not smtp_pass or not smtp_server:
-    print("Missing Brevo SMTP credentials.")
-    exit(1)
-
-subject = f"{total} rooms available"
-body = f"{total} rooms available\n"
-
-msg = MIMEText(body)
-msg["Subject"] = subject
-msg["From"] = smtp_user
-msg["To"] = ", ".join(RECIPIENTS)
+# --- Send notification via Formspree ---
+message = f"{total} rooms available"
 
 try:
-    with smtplib.SMTP(smtp_server, 587) as server:
-        server.starttls()
-        server.login(smtp_user, smtp_pass)
-        server.sendmail(smtp_user, RECIPIENTS, msg.as_string())
-        print("Email & SMS sent successfully")
+    response = requests.post(
+        FORMSPREE_ENDPOINT,
+        data={"message": message},
+        timeout=10
+    )
+    if response.status_code in [200, 202]:
+        print("Notification sent successfully via Formspree!")
+    else:
+        print(f"Formspree returned {response.status_code}: {response.text}")
 
 except Exception as e:
-    print("Error sending email/SMS:", e)
+    print("Error sending Formspree notification:", e)
