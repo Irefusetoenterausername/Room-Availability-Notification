@@ -1,5 +1,6 @@
 import os
-import requests
+import smtplib
+from email.mime.text import MIMEText
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from selenium import webdriver
@@ -9,10 +10,10 @@ from selenium.webdriver.common.by import By
 # --- Configuration ---
 URL = "https://live.ipms247.com/booking/book-rooms-hollywoodviphotel"
 TARGET_HOURS_PT = [15, 18, 21]  # 3pm, 6pm, 9pm PT
-FROM_EMAIL = "Mailgun Sandbox <postmaster@YOUR_SANDBOX_DOMAIN.mailgun.org>"  # replace with yours
-TO_EMAILS = ["recipient1@example.com", "recipient2@example.com"]
 
-# --- Time check for PST/PDT ---
+RECIPIENTS = ["cherrytop3000@gmail.com", "3104866003@tmomail.net"]
+
+# --- PST/PDT Time Check ---
 pst_now = datetime.now(ZoneInfo("America/Los_Angeles"))
 current_hour = pst_now.hour
 
@@ -34,42 +35,37 @@ try:
     driver.implicitly_wait(5)
 
     num1 = int(driver.find_element(By.CSS_SELECTOR, "#leftroom_0").text.strip())
-    num2 = int(driver.find_element(By.CSS_SELECTOR, "#rightroom_0").text.strip())
+    num2 = int(driver.find_element(By.CSS_SELECTOR, "#leftroom_4").text.strip())
     total = num1 + num2
+
     print(f"Scraped values: {num1}, {num2} | Total: {total}")
 
 finally:
     driver.quit()
 
-# --- Send email via Mailgun ---
-MAILGUN_API_KEY = os.environ.get("MAILGUN_API_KEY")
-MAILGUN_DOMAIN = os.environ.get("MAILGUN_DOMAIN")  # e.g. sandbox12345.mailgun.org or your own domain
+# --- Brevo SMTP (TLS on port 587) ---
+smtp_user = os.environ.get("BREVO_SMTP_USER")
+smtp_pass = os.environ.get("BREVO_SMTP_PASS")
+smtp_server = os.environ.get("BREVO_SMTP_SERVER")
 
-if not MAILGUN_API_KEY or not MAILGUN_DOMAIN:
-    print("Mailgun credentials missing. Exiting.")
+if not smtp_user or not smtp_pass or not smtp_server:
+    print("Missing Brevo SMTP credentials.")
     exit(1)
 
-subject = f"Hollywood VIP Hotel Rooms — {total} available"
-html_content = f"""
-<h2>Room Availability Update</h2>
-<p><strong>Total rooms available:</strong> {total}</p>
-<p>Scraped at {pst_now.strftime('%Y-%m-%d %I:%M %p %Z')}</p>
-"""
+subject = f"{total} rooms available"
+body = f"{total} rooms available\n"
+
+msg = MIMEText(body)
+msg["Subject"] = subject
+msg["From"] = smtp_user
+msg["To"] = ", ".join(RECIPIENTS)
 
 try:
-    response = requests.post(
-        f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/messages",
-        auth=("api", MAILGUN_API_KEY),
-        data={
-            "from": FROM_EMAIL,
-            "to": TO_EMAILS,
-            "subject": subject,
-            "html": html_content,
-        },
-    )
-    if response.status_code == 200:
-        print("Email sent successfully.")
-    else:
-        print(f"Mailgun responded with {response.status_code}: {response.text}")
+    with smtplib.SMTP(smtp_server, 587) as server:
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_user, RECIPIENTS, msg.as_string())
+        print("Email & SMS sent successfully")
+
 except Exception as e:
-    print("Error sending email:", e)
+    print("Error sending email/SMS:", e)
