@@ -25,8 +25,6 @@ jobs:
 
       - name: Run scraper
         env:
-          BREVO_SMTP_USER: ${{ secrets.BREVO_SMTP_USER }}
-          BREVO_SMTP_PASS: ${{ secrets.BREVO_SMTP_PASS }}
-          BREVO_SMTP_SERVER: ${{ secrets.BREVO_SMTP_SERVER }}
+          FORMSPREE_ENDPOINT: ${{ secrets.FORMSPREE_ENDPOINT }}
         run: |
           python scraper.py
