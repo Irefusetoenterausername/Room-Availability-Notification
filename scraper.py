@@ -38,6 +38,11 @@ try:
     print("Loading page...")
     driver.get(URL)
 
+    html = driver.page_source
+with open("page.html", "w", encoding="utf-8") as f:
+    f.write(html)
+print("Saved page.html")
+
     wait = WebDriverWait(driver, 20)
 
     # Wait for the two room elements to appear
