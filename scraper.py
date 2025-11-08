@@ -1,5 +1,4 @@
 import os
-import time
 import requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -40,7 +39,7 @@ options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 
 driver = webdriver.Chrome(options=options)
-wait = WebDriverWait(driver, 30)  # generous wait for stability
+wait = WebDriverWait(driver, 30)  # generous wait
 
 
 try:
@@ -61,7 +60,7 @@ try:
         Waits until:
         - The element exists
         - The text is numeric
-        - The numeric value is < 20 (real values are small)
+        - The numeric value is < 20 (real inventory values)
         """
         print(f"[INFO] Waiting for final value in {css_selector}...")
 
@@ -111,4 +110,4 @@ try:
         print(f"[ERROR] Webhook returned {response.status_code}: {response.text}")
 
 except Exception as e:
-    print("[ERROR] Failed to send to webhook:",
+    print(f"[ERROR] Failed to send to webhook: {e}")
