@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -11,84 +12,103 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 
-# --- Configuration ---
+# -------------------------------------------------------------
+# Configuration
+# -------------------------------------------------------------
 URL = "https://live.ipms247.com/booking/book-rooms-hollywoodviphotel"
-TARGET_HOURS_PT = [15, 18, 21]  # 3 pm / 6 pm / 9 pm PT
 
+# Notify only at 3pm, 6pm, 9pm PT
+TARGET_HOURS_PT = [15, 18, 21]
 
-# --- PST/PDT Time Check ---
+# -------------------------------------------------------------
+# Time gating (PST/PDT)
+# -------------------------------------------------------------
 pst_now = datetime.now(ZoneInfo("America/Los_Angeles"))
 current_hour = pst_now.hour
 
 if current_hour not in TARGET_HOURS_PT:
-    print(f"Current PT hour ({current_hour}) is not a target hour. Exiting.")
+    print(f"[INFO] Current PT hour ({current_hour}) is not a target hour. Exiting.")
     exit()
 
 
-# --- Selenium Setup ---
+# -------------------------------------------------------------
+# Selenium setup
+# -------------------------------------------------------------
 options = Options()
 options.add_argument("--headless=new")
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 
 driver = webdriver.Chrome(options=options)
+wait = WebDriverWait(driver, 30)  # generous wait for stability
+
 
 try:
-    print("Loading page...")
+    print("[INFO] Loading page...")
     driver.get(URL)
 
-    # ----------------------------------------------------
-    # DEBUG: Save entire page HTML so we can inspect actual structure
-    # ----------------------------------------------------
-    html = driver.page_source
-    with open("page.html", "w", encoding="utf-8") as f:
-        f.write(html)
-    print("Saved page.html")
-    # ----------------------------------------------------
+    # ---------------------------------------------------------
+    # 1. Wait for booking engine container to appear
+    # ---------------------------------------------------------
+    print("[INFO] Waiting for booking engine DOM root...")
+    wait.until(EC.presence_of_element_located((By.ID, "eZ_BookingRooms")))
 
-    wait = WebDriverWait(driver, 20)
+    # ---------------------------------------------------------
+    # 2. Helper: wait for a room element to contain the final value
+    # ---------------------------------------------------------
+    def wait_final_value(css_selector):
+        """
+        Waits until:
+        - The element exists
+        - The text is numeric
+        - The numeric value is < 20 (real values are small)
+        """
+        print(f"[INFO] Waiting for final value in {css_selector}...")
 
-    # Wait for the two room elements to appear
-    elem1 = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#leftroom_0")))
-    elem2 = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#leftroom_4")))
+        def valid_value(driver):
+            try:
+                text = driver.find_element(By.CSS_SELECTOR, css_selector).text.strip()
+                if text.isdigit() and 0 <= int(text) < 20:
+                    return text
+                return False
+            except:
+                return False
 
-    # Wait until both are numeric and stable
-    def wait_for_number(element):
-        WebDriverWait(driver, 20).until(lambda d: element.text.strip().isdigit())
+        return wait.until(valid_value)
 
-    wait_for_number(elem1)
-    wait_for_number(elem2)
-
-    # Extract numbers
-    num1 = int(elem1.text.strip())
-    num2 = int(elem2.text.strip())
+    # ---------------------------------------------------------
+    # 3. Get final, correct numbers
+    # ---------------------------------------------------------
+    num1 = int(wait_final_value("#leftroom_0"))
+    num2 = int(wait_final_value("#leftroom_4"))
     total = num1 + num2
 
-    print(f"Final scraped numbers: leftroom_0={num1}, leftroom_4={num2}, total={total}")
+    print(f"[SUCCESS] Scraped room numbers: {num1} + {num2} = {total}")
 
 finally:
     driver.quit()
 
 
-# --- Send notification to Make.com webhook ---
-message = f"{total} rooms available"
-payload = {"value1": message}
-
+# -------------------------------------------------------------
+# Send notification to Make.com webhook
+# -------------------------------------------------------------
 webhook_url = os.environ.get("MAKE_WEBHOOK_URL")
 
 if not webhook_url:
-    print("Missing MAKE_WEBHOOK_URL environment variable.")
+    print("[ERROR] Missing MAKE_WEBHOOK_URL environment variable.")
     exit(1)
 
-print("Sending to webhook:", webhook_url)
+payload = {"value1": f"{total} rooms available"}
+
+print("[INFO] Sending to Make webhook...")
 
 try:
-    response = requests.post(webhook_url, json=payload, timeout=10)
+    response = requests.post(webhook_url, json=payload, timeout=15)
 
     if response.status_code in (200, 202):
-        print("Notification sent to Make webhook successfully!")
+        print("[SUCCESS] Notification delivered to Make.com webhook!")
     else:
-        print(f"Make webhook returned {response.status_code}: {response.text}")
+        print(f"[ERROR] Webhook returned {response.status_code}: {response.text}")
 
 except Exception as e:
-    print("Error sending to webhook:", e)
+    print("[ERROR] Failed to send to webhook:",
