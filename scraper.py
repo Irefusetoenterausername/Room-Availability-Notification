@@ -13,9 +13,8 @@ from selenium.webdriver.support import expected_conditions as EC
 
 # --- Configuration ---
 URL = "https://live.ipms247.com/booking/book-rooms-hollywoodviphotel"
-TARGET_HOURS_PT = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+TARGET_HOURS_PT = [15, 18, 21]  # 3 pm / 6 pm / 9 pm PT
 
-RECIPIENTS = ["cherrytop3000@gmail.com"]
 
 # --- PST/PDT Time Check ---
 pst_now = datetime.now(ZoneInfo("America/Los_Angeles"))
@@ -38,10 +37,14 @@ try:
     print("Loading page...")
     driver.get(URL)
 
+    # ----------------------------------------------------
+    # DEBUG: Save entire page HTML so we can inspect actual structure
+    # ----------------------------------------------------
     html = driver.page_source
-with open("page.html", "w", encoding="utf-8") as f:
-    f.write(html)
-print("Saved page.html")
+    with open("page.html", "w", encoding="utf-8") as f:
+        f.write(html)
+    print("Saved page.html")
+    # ----------------------------------------------------
 
     wait = WebDriverWait(driver, 20)
 
@@ -49,7 +52,7 @@ print("Saved page.html")
     elem1 = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#leftroom_0")))
     elem2 = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#leftroom_4")))
 
-    # Wait until both texts are numeric (no placeholders)
+    # Wait until both are numeric and stable
     def wait_for_number(element):
         WebDriverWait(driver, 20).until(lambda d: element.text.strip().isdigit())
 
