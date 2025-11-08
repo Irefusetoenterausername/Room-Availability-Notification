@@ -2,8 +2,7 @@ name: Room Availability Notification
 
 on:
   schedule:
-    # Run every hour (UTC). scraper.py checks PST and exits unless 3/6/9 PM PT.
-    - cron: "0 * * * *"
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -12,10 +11,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: "3.11"
 
@@ -24,14 +23,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Install Chrome
-        uses: browser-actions/setup-chrome@v1
-
       - name: Install ChromeDriver
         uses: nanasess/setup-chromedriver@master
+        with:
+          chrome-version: 'latest'
 
       - name: Run scraper
         env:
           MAKE_WEBHOOK_URL: ${{ secrets.MAKE_WEBHOOK_URL }}
-        run: |
-          python scraper.py
+        run: python scraper.py
+
+      - name: Upload page.html debug file
+        uses: actions/upload-artifact@v3
+        with:
+          name: page-html
+          path: page.html
+          retention-days: 5
