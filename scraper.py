@@ -132,7 +132,7 @@ num2 = get_stable_value("#leftroom_4")
 num3 = get_stable_value("#leftroom_6")
 total = num1 + num2 + num3
 
-print(f"[SUCCESS] FINAL ROOM AVAILABILITY: {num1} + {num2}+ {num3} = {total}")
+print(f"[SUCCESS] FINAL ROOM AVAILABILITY: {num1} + {num2} + {num3} = {total}")
 
 
 # Close browser
